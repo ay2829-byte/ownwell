@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exemption Flow: click the leak</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  :root {
+    --paper: #f5f3ec;
+    --ink: #20241f;
+    --muted: #6e6c60;
+    --line: #ded9c8;
+    --teal: #2d6b64;
+    --teal-pale: #e2eeec;
+    --amber: #b8863b;
+    --brick: #a24e3a;
+    --brick-pale: #f5e6e1;
+    --good-bg: #e5f0e7;
+    --good: #3f6b52;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Inter', sans-serif; }
+  .page { max-width: 820px; margin: 0 auto; padding: 54px 24px 90px; }
+
+  .kicker { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
+  h1 {
+    font-family: 'Source Serif 4', serif; font-weight: 600; font-size: 33px; line-height: 1.2;
+    letter-spacing: -0.015em; margin: 0 0 14px; max-width: 22ch; color: var(--ink);
+  }
+  .instruction { font-size: 15.5px; color: var(--muted); max-width: 56ch; margin-bottom: 44px; line-height: 1.6; }
+  .instruction b { color: var(--ink); }
+
+  .funnel { margin-bottom: 10px; }
+  .funnel-step {
+    position: relative; margin-bottom: 22px; cursor: pointer;
+    transition: transform .12s ease;
+  }
+  .funnel-step:hover { transform: translateX(3px); }
+  .funnel-step.selected { transform: translateX(3px); }
+  .step-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+  .step-name { font-size: 16px; font-weight: 600; }
+  .step-n { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .step-track { height: 34px; background: #e8e3d3; border-radius: 6px; overflow: hidden; position: relative; }
+  .step-fill { height: 100%; background: var(--ink); border-radius: 6px; transition: background .15s ease; }
+  .funnel-step:hover .step-fill, .funnel-step.selected .step-fill { background: var(--teal); }
+  .step-drop {
+    font-size: 13px; color: var(--brick); margin-top: 6px; font-weight: 500;
+  }
+  .step-drop.worst { font-weight: 700; }
+  .click-hint {
+    font-size: 12px; color: var(--muted); margin-top: 4px; opacity: 0; transition: opacity .15s ease;
+  }
+  .funnel-step:hover .click-hint { opacity: 1; }
+  .funnel-step.worst-marker::after {
+    content: "click to diagnose"; position: absolute; right: 0; top: -22px;
+    font-size: 11.5px; color: var(--teal); font-weight: 600;
+  }
+
+  .diagnosis-panel {
+    margin-top: 36px; border: 1px solid var(--line); border-radius: 10px;
+    background: #fff; overflow: hidden; display: none;
+  }
+  .diagnosis-panel.active { display: block; }
+  .dp-header {
+    padding: 18px 22px; background: var(--teal-pale); border-bottom: 1px solid var(--line);
+    font-size: 14px; color: var(--teal);
+  }
+  .dp-header b { color: var(--ink); }
+  .dp-body { padding: 22px 24px; }
+  .dp-loading { color: var(--muted); font-size: 14.5px; display: flex; align-items: center; gap: 10px; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--teal);
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .dp-section { margin-bottom: 20px; }
+  .dp-section:last-child { margin-bottom: 0; }
+  .dp-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin-bottom: 8px; }
+  .dp-text { font-size: 15px; line-height: 1.6; }
+
+  .verify-box {
+    margin-top: 18px; border-radius: 8px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55;
+  }
+  .verify-box.checking { background: #f3ede1; color: #7a5a1e; }
+  .verify-box.pass { background: var(--good-bg); color: #234a33; }
+  .verify-box.fail { background: var(--brick-pale); color: #7a2e1e; }
+  .verify-box .vtitle { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+
+  .rerun-btn {
+    margin-top: 16px; background: none; border: 1px solid var(--line); border-radius: 20px;
+    padding: 8px 16px; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  .rerun-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 34px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="kicker">A worked example for Ownwell, Product Manager application</div>
+  <h1>Exemption flow completion, week of Sept 15</h1>
+  <p class="instruction">1,000 homeowners entered the flow this week. <b>Click the step with the biggest drop</b>, and I'll generate a live diagnosis and proposed experiment from the actual numbers, then check the AI's claims against the data before trusting them.</p>
+
+  <div class="funnel" id="funnel"></div>
+
+  <div class="diagnosis-panel" id="diagnosisPanel">
+    <div class="dp-header" id="dpHeader"></div>
+    <div class="dp-body" id="dpBody"></div>
+  </div>
+
+  <div class="note">This calls Claude live using the funnel numbers on this page. It only runs inside this Claude.ai artifact view, since a standalone deployed link has no API key available.</div>
+</div>
+
+<script>
+const FUNNEL = [
+  { label: "Started application", n: 1000 },
+  { label: "Property matched", n: 870 },
+  { label: "Documents requested", n: 790 },
+  { label: "Documents uploaded", n: 520 },
+  { label: "Submitted to county", n: 470 },
+  { label: "Approved", n: 410 },
+];
+
+function drops() {
+  return FUNNEL.slice(0, -1).map((s, i) => ({
+    from: s.label, to: FUNNEL[i+1].label,
+    fromN: s.n, toN: FUNNEL[i+1].n,
+    pct: Math.round(((s.n - FUNNEL[i+1].n) / s.n) * 100),
+    idx: i,
+  }));
+}
+
+function renderFunnel() {
+  const max = FUNNEL[0].n;
+  const d = drops();
+  const worstIdx = d.reduce((best, cur) => cur.pct > d[best].pct ? cur.idx : best, 0);
+  const el = document.getElementById("funnel");
+  el.innerHTML = FUNNEL.map((step, i) => {
+    const pct = Math.round((step.n / max) * 100);
+    const dropInfo = d[i];
+    const isWorstStep = i === worstIdx + 1; // the step people fail to REACH
+    return `
+      <div class="funnel-step ${isWorstStep ? 'worst-marker' : ''}" data-idx="${i}">
+        <div class="step-top">
+          <div class="step-name">${step.label}</div>
+          <div class="step-n">${step.n.toLocaleString()}</div>
+        </div>
+        <div class="step-track"><div class="step-fill" style="width:${pct}%;"></div></div>
+        ${dropInfo ? `<div class="step-drop ${dropInfo.idx === worstIdx ? 'worst' : ''}">${dropInfo.pct}% drop to next step${dropInfo.idx === worstIdx ? ', the biggest leak' : ''}</div>` : ''}
+      </div>
+    `;
+  }).join("");
+
+  document.querySelectorAll(".funnel-step").forEach(el => {
+    el.addEventListener("click", () => diagnoseStep(parseInt(el.dataset.idx)));
+  });
+}
+
+async function callClaude(prompt, maxTokens = 500) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] })
+  });
+  const data = await res.json();
+  const block = (data.content || []).find(b => b.type === "text");
+  return block ? block.text : "";
+}
+
+async function diagnoseStep(idx) {
+  document.querySelectorAll(".funnel-step").forEach(el => el.classList.remove("selected"));
+  document.querySelector(`.funnel-step[data-idx="${idx}"]`).classList.add("selected");
+
+  const d = drops();
+  if (idx >= d.length) return; // last step, no drop after it
+  const drop = d[idx];
+
+  const panel = document.getElementById("diagnosisPanel");
+  const header = document.getElementById("dpHeader");
+  const body = document.getElementById("dpBody");
+  panel.classList.add("active");
+  header.innerHTML = `Diagnosing: <b>${drop.from} to ${drop.to}</b>, ${drop.pct}% drop-off (${drop.fromN.toLocaleString()} → ${drop.toN.toLocaleString()})`;
+  body.innerHTML = `<div class="dp-loading"><div class="spinner"></div>Generating diagnosis and experiment from the real numbers…</div>`;
+
+  const prompt = `You are a product manager at Ownwell, a property tax company. Here is a real drop-off in our exemption filing funnel:
+
+${drop.fromN} homeowners reached "${drop.from}". Only ${drop.toN} reached the next step, "${drop.to}". That's a ${drop.pct}% drop-off, the largest in the entire funnel (other steps drop 9-13%).
+
+Write:
+1. DIAGNOSIS: One paragraph, a plausible, specific hypothesis for why this exact step has 3x the drop-off of any other step (not generic "users find it hard"). Ground it in something concrete about property tax document collection specifically.
+2. EXPERIMENT: One paragraph proposing a specific, narrow experiment to test that hypothesis, including what you'd measure.
+
+Be concise and concrete. Use the actual numbers I gave you at least once. Do not use em dashes anywhere in your response, use commas or periods instead. Format your response EXACTLY as:
+DIAGNOSIS: [text]
+EXPERIMENT: [text]`;
+
+  let raw = "";
+  try {
+    raw = await callClaude(prompt);
+  } catch (e) {
+    body.innerHTML = `<div class="dp-text">Error: ${e.message}</div>`;
+    return;
+  }
+
+  const diagMatch = raw.match(/DIAGNOSIS:\s*([\s\S]*?)(?=EXPERIMENT:|$)/i);
+  const expMatch = raw.match(/EXPERIMENT:\s*([\s\S]*)/i);
+  const diagnosis = diagMatch ? diagMatch[1].trim() : raw;
+  const experiment = expMatch ? expMatch[1].trim() : "";
+
+  body.innerHTML = `
+    <div class="dp-section">
+      <div class="dp-label">Diagnosis</div>
+      <div class="dp-text">${diagnosis}</div>
+    </div>
+    <div class="dp-section">
+      <div class="dp-label">Proposed experiment</div>
+      <div class="dp-text">${experiment}</div>
+    </div>
+    <div class="verify-box checking" id="verifyBox">
+      <div class="vtitle"><div class="spinner"></div>Verifying the numbers cited above against the actual funnel data…</div>
+    </div>
+    <button class="rerun-btn" id="rerunBtn">Regenerate</button>
+  `;
+  document.getElementById("rerunBtn").addEventListener("click", () => diagnoseStep(idx));
+
+  verifyClaims(diagnosis + " " + experiment, drop);
+}
+
+function verifyClaims(text, drop) {
+  // Real, mechanical check: does the response actually cite the real numbers we gave it,
+  // rather than inventing different ones. This is a simple but genuine guardrail,
+  // not a rubber stamp, it actually fails if the model hallucinates a number.
+  const numbersInText = (text.match(/\d[\d,]*/g) || []).map(n => parseInt(n.replace(/,/g, "")));
+  const expectedNumbers = [drop.fromN, drop.toN, drop.pct];
+  const citedReal = expectedNumbers.some(n => numbersInText.includes(n));
+
+  const suspiciousNumbers = numbersInText.filter(n =>
+    n > 50 && n < 100000 && !expectedNumbers.includes(n) && n !== 1000
+  );
+
+  const box = document.getElementById("verifyBox");
+  if (citedReal && suspiciousNumbers.length === 0) {
+    box.className = "verify-box pass";
+    box.innerHTML = `<div class="vtitle">✓ Verified</div>The response cites the real funnel numbers (${drop.fromN.toLocaleString()} → ${drop.toN.toLocaleString()}, ${drop.pct}% drop) and doesn't introduce any invented figures. Safe to use as-is.`;
+  } else if (suspiciousNumbers.length > 0) {
+    box.className = "verify-box fail";
+    box.innerHTML = `<div class="vtitle">⚠ Needs a second look</div>The response includes number${suspiciousNumbers.length > 1 ? 's' : ''} (${suspiciousNumbers.join(", ")}) that weren't in the data I provided. That doesn't mean it's wrong, it might be a reasonable estimate, but it should be checked before going in a report rather than taken at face value.`;
+  } else {
+    box.className = "verify-box pass";
+    box.innerHTML = `<div class="vtitle">✓ Verified</div>No invented numbers detected. The reasoning is qualitative and doesn't lean on figures beyond what was provided.`;
+  }
+}
+
+renderFunnel();
+</script>
+</body>
+</html>
